@@ -1,4 +1,4 @@
-# cardinfo.py
+# Cardinfo.py
 
 import re
 import string
@@ -55,13 +55,13 @@ class CardInfoGatherer:
         self.soup = soup
 
     def name(self):
-        n = self.soup.find('div', id=PREFIX2+"nameRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"nameRow")
         o = n.find('div', {'class': 'value'})
         return gather_contents(o)
 
     def manacost(self):
         syms = []
-        n = self.soup.find('div', id=PREFIX2+"manaRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"manaRow")
         if n is None: return []
         for o in n.findAll('img'):
             sym = o['alt'].lower().strip()
@@ -70,12 +70,12 @@ class CardInfoGatherer:
         return map(str, syms)
 
     def type(self):
-        n = self.soup.find('div', id=PREFIX2+"typeRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"typeRow")
         o = n.find('div', {'class': 'value'})
         return gather_contents(o)
 
     def rules(self):
-        n = self.soup.find('div', id=PREFIX2+"textRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"textRow")
         if n is None: return "" # always create a node for rules, even if empty
         parts = [gather_contents(o)
                  for o in n.findAll('div', {'class': 'cardtextbox'})]
@@ -84,31 +84,31 @@ class CardInfoGatherer:
 
     def flavor_text(self):
         # XXX much the same as rules_printed()... refactor
-        n = self.soup.find('div', id=PREFIX2+"FlavorText")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"FlavorText")
         if n is None: return None
         parts = [gather_contents(o)
                  for o in n.findAll('div', {'class': 'cardtextbox'})]
         return string.join(parts, "\n")
 
     def rarity(self):
-        n = self.soup.find('div', id=PREFIX2+"rarityRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"rarityRow")
         o = n.find('div', {'class': 'value'})
         rarity = gather_contents(o).lower().strip()
         return symbols.rarities[rarity]
 
     def number(self):
-        n = self.soup.find('div', id=PREFIX2+"numberRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"numberRow")
         if n is None: return None # older cards don't have a number
         o = n.find('div', {'class': 'value'})
         return gather_contents(o)
 
     def artist(self):
-        n = self.soup.find('div', id=PREFIX2+"artistRow")
-        o = n.find('div', id=PREFIX2+"ArtistCredit")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"artistRow")
+        o = n.find('div', id=get_card_prefix(self.soup)+"ArtistCredit")
         return gather_contents(o)
 
     def _power_toughness(self):
-        n = self.soup.find('div', id=PREFIX2+"ptRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"ptRow")
         if n is None: return None, None
         o = n.find('div', {'class': 'value'})
         s = gather_contents(o)
@@ -128,11 +128,15 @@ class CardInfoGatherer:
         return t
 
     def loyalty(self):
-        n = self.soup.find('div', id=PREFIX2+"ptRow")
+        n = self.soup.find('div', id=get_card_prefix(self.soup)+"ptRow")
         if n is None: return None
-        if "Loyalty:" not in gather_contents(n): return None # P/T
+        if "Loyalty:" not in gather_contents(n):
+            return None # P/T
         o = n.find('div', {'class': 'value'})
         return gather_contents(o)
+    
+    def flip_multiverseid(self):
+        return get_flip_multiverseid(self.soup)
 
 def gather_contents(soupnode):
     """ Gather contents from a BeautifulSoup node, stripping HTML, replacing
@@ -158,6 +162,39 @@ re_html_tag = re.compile("<[^>]+>")
 
 def strip_html(s):
     return re_html_tag.sub("", s)
+
+def get_card_prefix(soupnode):
+    actionDetail = soupnode.find("form", id="aspnetForm")['action']
+    multiverseid = re.match(r"Details\.aspx\?multiverseid=([0-9]*).*", actionDetail).group(1)
+    imageDetail = soupnode.find("img", src=re.compile('Image.ashx.*multiverseid='+multiverseid))
+    if imageDetail:
+        flipId = re.match(r"ctl00_ctl00_ctl00_MainContent_SubContent_SubContent_ctl([0-9]*)_cardImage", imageDetail['id'])
+        if flipId:
+            return "ctl00_ctl00_ctl00_MainContent_SubContent_SubContent_ctl" + flipId.group(1) + "_"
+        else:
+            return PREFIX2
+    else:
+        return PREFIX2
+
+#FIXME copy pasta.  This can be refactored.
+def get_flip_multiverseid(soupnode):
+    actionDetail = soupnode.find("form", id="aspnetForm")['action']
+    multiverseid = re.match(r"Details\.aspx\?multiverseid=([0-9]*).*", actionDetail).group(1)
+    imageDetail = soupnode.find("img", src=re.compile('Image.ashx.*multiverseid='+multiverseid))
+    if imageDetail:
+        flipId = re.match(r"ctl00_ctl00_ctl00_MainContent_SubContent_SubContent_ctl([0-9]*)_cardImage", imageDetail['id'])
+        if flipId:
+            if flipId.group(1) == "05":
+                flipTagNumber = "06"
+            else:
+                flipTagNumber = "05"
+            imageSrc = soupnode.find("img", id=re.compile("ctl00_ctl00_ctl00_MainContent_SubContent_SubContent_ctl"+ flipTagNumber + "_cardImage"))['src']
+            return re.match(r".*multiverseid=([0-9]*).*", imageSrc).group(1)
+        else:
+            return None
+    else:
+        return None
+    
 
 bogus_mana = [
     ('ooB', '{B}:'),

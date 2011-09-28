@@ -66,7 +66,7 @@ def gen_xml(short_set):
 
 ATTRS = ['name', 'manacost', 'type', 'rules',
          'rarity', 'number', 'artist', 'power', 'toughness', 
-         'loyalty', 'flavor_text']
+         'loyalty', 'flavor_text', 'flip_multiverseid']
 SPECIAL = ['manacost']
 # these attribute names should correspond to CardInfoGatherer methods and the
 # eventual XML tags that we're going to use
